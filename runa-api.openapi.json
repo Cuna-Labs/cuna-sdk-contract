@@ -7,12 +7,7 @@
   },
   "servers": [
     {
-      "url": "https://api.getcuna.com",
-      "description": "Canonical Cuna API origin"
-    },
-    {
-      "url": "https://api.runacode.io",
-      "description": "Legacy-compatible Runa API origin"
+      "url": "https://api.getcuna.com"
     }
   ],
   "security": [
@@ -246,6 +241,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/MachineCreateRequestId"
           }
         ],
         "x-runa-error-model": "problem"
@@ -313,6 +311,53 @@
         ],
         "x-runa-required-permissions": [
           "machines:delete"
+        ],
+        "security": [
+          {
+            "SupabaseJwt": []
+          },
+          {
+            "RunaApiKey": []
+          },
+          {
+            "RunaHumanBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{id}/agent-auth": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
+      "get": {
+        "operationId": "sessions.agentAuth",
+        "deprecated": true,
+        "x-sdk-exposed": true,
+        "description": "Deprecated machine-scoped alias of `agentSessions.agentAuth`. It remains published so already-released SDKs keep working; new callers SHALL use `GET /v1/agent-sessions/{id}/agent-auth`, which reports the exact AgentSession process generation.",
+        "responses": {
+          "200": {
+            "description": "Low-information agent authentication state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentAuth"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-runa-auth-classes": [
+          "browser_jwt",
+          "programmatic_api_key",
+          "cli_human"
+        ],
+        "x-runa-required-permissions": [
+          "machines:read"
         ],
         "security": [
           {
@@ -451,28 +496,37 @@
         ]
       }
     },
-    "/v1/sessions/{id}/agent-auth": {
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/SessionId"
-        }
-      ],
+    "/v1/agent-session-creates": {
       "get": {
-        "operationId": "sessions.agentAuth",
-        "x-sdk-exposed": true,
+        "operationId": "agentSessions.inspectCreate",
+        "x-sdk-exposed": false,
+        "x-runa-error-model": "problem",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Low-information agent authentication state observed from the owned machine runtime.",
+            "description": "Exact durable AgentSession create intent recovered with the original user-scoped idempotency key.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Recovery evidence is never reusable through an HTTP cache.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AgentAuth"
+                  "$ref": "#/components/schemas/AgentSession"
                 }
               }
             }
           },
           "default": {
-            "$ref": "#/components/responses/Error"
+            "$ref": "#/components/responses/Problem"
           }
         },
         "x-runa-auth-classes": [
@@ -481,7 +535,7 @@
           "cli_human"
         ],
         "x-runa-required-permissions": [
-          "machines:read"
+          "agent_sessions:read"
         ],
         "security": [
           {
@@ -489,6 +543,130 @@
           },
           {
             "RunaApiKey": []
+          },
+          {
+            "RunaHumanBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/agent-sessions/{id}/agent-auth": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AgentSessionId"
+        }
+      ],
+      "get": {
+        "operationId": "agentSessions.agentAuth",
+        "x-sdk-exposed": true,
+        "x-runa-error-model": "problem",
+        "responses": {
+      "200": {
+        "description": "Low-information authentication state for the exact owned AgentSession process generation.",
+        "headers": {
+          "Cache-Control": {
+            "description": "Authentication evidence is never reusable through an HTTP cache.",
+            "schema": {
+              "const": "no-store"
+            }
+          }
+        },
+        "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSessionAuth"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-runa-auth-classes": [
+          "browser_jwt",
+          "programmatic_api_key",
+          "cli_human"
+        ],
+        "x-runa-required-permissions": [
+          "agent_sessions:read"
+        ],
+        "security": [
+          {
+            "SupabaseJwt": []
+          },
+          {
+            "RunaApiKey": []
+          },
+          {
+            "RunaHumanBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/agent-sessions/{id}/agent-auth/logout": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AgentSessionId"
+        }
+      ],
+      "post": {
+        "operationId": "agentSessions.logoutAgentAuth",
+        "x-sdk-exposed": false,
+        "x-runa-error-model": "problem",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "process_epoch"
+                ],
+                "properties": {
+                  "process_epoch": {
+                    "$ref": "#/components/schemas/Uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Confirmation that provider credentials were removed from the exact current AgentSession process generation.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Provider sign-out results are never reusable through an HTTP cache.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSessionAuthLogout"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-runa-auth-classes": [
+          "browser_jwt",
+          "cli_human"
+        ],
+        "x-runa-required-permissions": [
+          "agent_sessions:update",
+          "auth:interactive"
+        ],
+        "security": [
+          {
+            "SupabaseJwt": []
           },
           {
             "RunaHumanBearer": []
@@ -672,7 +850,7 @@
         },
         "responses": {
           "201": {
-            "description": "Short-lived Runa terminal connection grant. The one-use connect token is returned separately and is never embedded in the URL.",
+            "description": "Short-lived Cuna terminal connection grant. The one-use connect token is returned separately and is never embedded in the URL.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1593,6 +1771,7 @@
         },
         "x-runa-auth-classes": [
           "browser_jwt",
+          "programmatic_api_key",
           "cli_human"
         ],
         "x-runa-required-permissions": [
@@ -1601,6 +1780,9 @@
         "security": [
           {
             "SupabaseJwt": []
+          },
+          {
+            "RunaApiKey": []
           },
           {
             "RunaHumanBearer": []
@@ -1622,6 +1804,7 @@
         },
         "x-runa-auth-classes": [
           "browser_jwt",
+          "programmatic_api_key",
           "cli_human"
         ],
         "x-runa-required-permissions": [
@@ -1630,6 +1813,9 @@
         "security": [
           {
             "SupabaseJwt": []
+          },
+          {
+            "RunaApiKey": []
           },
           {
             "RunaHumanBearer": []
@@ -1651,6 +1837,7 @@
         },
         "x-runa-auth-classes": [
           "browser_jwt",
+          "programmatic_api_key",
           "cli_human"
         ],
         "x-runa-required-permissions": [
@@ -1659,6 +1846,9 @@
         "security": [
           {
             "SupabaseJwt": []
+          },
+          {
+            "RunaApiKey": []
           },
           {
             "RunaHumanBearer": []
@@ -1690,6 +1880,7 @@
         },
         "x-runa-auth-classes": [
           "browser_jwt",
+          "programmatic_api_key",
           "cli_human"
         ],
         "x-runa-required-permissions": [
@@ -1698,6 +1889,9 @@
         "security": [
           {
             "SupabaseJwt": []
+          },
+          {
+            "RunaApiKey": []
           },
           {
             "RunaHumanBearer": []
@@ -1717,6 +1911,7 @@
         },
         "x-runa-auth-classes": [
           "browser_jwt",
+          "programmatic_api_key",
           "cli_human"
         ],
         "x-runa-required-permissions": [
@@ -1725,6 +1920,9 @@
         "security": [
           {
             "SupabaseJwt": []
+          },
+          {
+            "RunaApiKey": []
           },
           {
             "RunaHumanBearer": []
@@ -1746,6 +1944,7 @@
         },
         "x-runa-auth-classes": [
           "browser_jwt",
+          "programmatic_api_key",
           "cli_human"
         ],
         "x-runa-required-permissions": [
@@ -1754,6 +1953,9 @@
         "security": [
           {
             "SupabaseJwt": []
+          },
+          {
+            "RunaApiKey": []
           },
           {
             "RunaHumanBearer": []
@@ -1783,6 +1985,7 @@
         },
         "x-runa-auth-classes": [
           "browser_jwt",
+          "programmatic_api_key",
           "cli_human"
         ],
         "x-runa-required-permissions": [
@@ -1791,6 +1994,9 @@
         "security": [
           {
             "SupabaseJwt": []
+          },
+          {
+            "RunaApiKey": []
           },
           {
             "RunaHumanBearer": []
@@ -1812,6 +2018,7 @@
         },
         "x-runa-auth-classes": [
           "browser_jwt",
+          "programmatic_api_key",
           "cli_human"
         ],
         "x-runa-required-permissions": [
@@ -1820,6 +2027,9 @@
         "security": [
           {
             "SupabaseJwt": []
+          },
+          {
+            "RunaApiKey": []
           },
           {
             "RunaHumanBearer": []
@@ -1846,6 +2056,7 @@
         },
         "x-runa-auth-classes": [
           "browser_jwt",
+          "programmatic_api_key",
           "cli_human"
         ],
         "x-runa-required-permissions": [
@@ -1854,6 +2065,9 @@
         "security": [
           {
             "SupabaseJwt": []
+          },
+          {
+            "RunaApiKey": []
           },
           {
             "RunaHumanBearer": []
@@ -2181,6 +2395,57 @@
           }
         }
       ],
+      "get": {
+        "operationId": "workspaces.sync.chunkDownload",
+        "x-sdk-exposed": true,
+        "x-runa-error-model": "problem",
+        "parameters": [
+          {
+            "name": "reader_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Digest-verified workspace chunk content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSyncChunkContentEnvelope"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/WorkspaceSyncProblem"
+          }
+        },
+        "x-runa-auth-classes": [
+          "browser_jwt",
+          "programmatic_api_key",
+          "cli_human"
+        ],
+        "x-runa-required-permissions": [
+          "workspace_sync:read"
+        ],
+        "security": [
+          {
+            "SupabaseJwt": []
+          },
+          {
+            "RunaApiKey": []
+          },
+          {
+            "RunaHumanBearer": []
+          }
+        ]
+      },
       "put": {
         "operationId": "workspaces.sync.chunk",
         "x-sdk-exposed": true,
@@ -2569,13 +2834,13 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "runa_sk_",
-        "description": "Programmatic Runa API key. Not valid for key-management operations."
+        "description": "Programmatic Cuna API key. Not valid for key-management operations."
       },
       "RunaHumanBearer": {
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "runa_at_",
-        "description": "Short-lived opaque Runa CLI human access token."
+        "description": "Short-lived opaque Cuna CLI human access token."
       }
     },
     "parameters": {
@@ -2606,6 +2871,15 @@
           "minLength": 8,
           "maxLength": 128,
           "pattern": "^[!-~]+$"
+        }
+      },
+      "MachineCreateRequestId": {
+        "name": "X-Cuna-Machine-Create-Request-Id",
+        "in": "header",
+        "required": false,
+        "description": "Optional caller-generated UUID that identifies the durable machine-create request. New clients send it before the first attempt and reuse it to inspect or reconcile an uncertain outcome after a lost response.",
+        "schema": {
+          "$ref": "#/components/schemas/Uuid"
         }
       },
       "CliContinuationId": {
@@ -2699,7 +2973,7 @@
       },
       "RuntimeUrl": {
         "type": "string",
-        "pattern": "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.runacode\\.cloud$"
+        "pattern": "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.cunacode\\.cloud$"
       },
       "OutboundPolicy": {
         "type": "object",
@@ -3113,7 +3387,7 @@
           },
           "browser_url": {
             "type": "string",
-            "pattern": "^https://app\\.runacode\\.io/cli/continue#[^?#]+$"
+            "pattern": "^https://app\\.getcuna\\.com/cli/continue#[^?#]+$"
           },
           "expires_at": {
             "type": "string",
@@ -3237,7 +3511,7 @@
         "properties": {
           "browser_nonce": {
             "type": "string",
-            "pattern": "^runa_cb_[A-Za-z0-9_-]{43}$"
+            "pattern": "^(?:cuna|runa)_cb_[A-Za-z0-9_-]{43}$"
           },
           "state": {
             "type": "string",
@@ -3353,6 +3627,7 @@
       "AgentAuth": {
         "type": "object",
         "additionalProperties": false,
+        "description": "Deprecated machine-scoped authentication state returned by `sessions.agentAuth`. It carries no process generation and is preserved only for already-released SDKs.",
         "required": [
           "agent",
           "method",
@@ -3430,6 +3705,188 @@
             }
           }
         ]
+      },
+      "AgentSessionAuth": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Short-lived, process-generation-bound authentication evidence. Consumers must reject observations after valid_until and must match agent_session_id, process_epoch, and auth_mode to the AgentSession they already admitted.",
+        "x-runa-semantic-invariants": [
+          "positive_valid_until_after_observed_at",
+          "positive_valid_until_not_after_runtime_lease",
+          "unavailable_valid_until_equals_observed_at",
+          "consumer_exact_agent_session_epoch_mode_match"
+        ],
+        "oneOf": [
+          {
+            "properties": {
+              "auth_mode": {
+                "const": "interactive_login"
+              },
+              "process_epoch": {
+                "$ref": "#/components/schemas/Uuid"
+              },
+              "agent_version": {
+                "type": "string",
+                "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+              },
+              "evidence_class": {
+                "const": "provider_cli_login_status"
+              },
+              "state": {
+                "enum": [
+                  "login_required",
+                  "authenticated"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "auth_mode": {
+                "const": "credential_binding"
+              },
+              "process_epoch": {
+                "$ref": "#/components/schemas/Uuid"
+              },
+              "agent_version": {
+                "type": "string",
+                "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+              },
+              "evidence_class": {
+                "const": "credential_binding_authority"
+              },
+              "state": {
+                "const": "configured"
+              }
+            }
+          },
+          {
+            "properties": {
+              "evidence_class": {
+                "const": "insufficient"
+              },
+              "state": {
+                "const": "unavailable"
+              }
+            }
+          }
+        ],
+        "required": [
+          "observation_id",
+          "agent_session_id",
+          "process_epoch",
+          "auth_mode",
+          "agent_version",
+          "adapter_version",
+          "evidence_class",
+          "observed_at",
+          "valid_until",
+          "state"
+        ],
+        "properties": {
+          "observation_id": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "agent_session_id": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "process_epoch": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "auth_mode": {
+            "enum": [
+              "interactive_login",
+              "credential_binding"
+            ]
+          },
+          "agent_version": {
+            "type": "string",
+            "pattern": "^(?:[0-9]+\\.[0-9]+\\.[0-9]+|unavailable)$"
+          },
+          "adapter_version": {
+            "const": "runa.agent-auth.v1"
+          },
+          "evidence_class": {
+            "enum": [
+              "provider_cli_login_status",
+              "credential_binding_authority",
+              "insufficient"
+            ]
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "valid_until": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "enum": [
+              "login_required",
+              "authenticated",
+              "configured",
+              "unavailable"
+            ]
+          }
+        }
+      },
+      "AgentSessionAuthLogout": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Exact process-generation confirmation for an AgentSession-scoped provider sign-out.",
+        "required": [
+          "observation_id",
+          "agent_session_id",
+          "process_epoch",
+          "auth_mode",
+          "agent",
+          "agent_version",
+          "adapter_version",
+          "observed_at",
+          "outcome"
+        ],
+        "properties": {
+          "observation_id": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "agent_session_id": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "process_epoch": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "auth_mode": {
+            "const": "interactive_login"
+          },
+          "agent": {
+            "enum": [
+              "claude-code",
+              "codex"
+            ]
+          },
+          "agent_version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          },
+          "adapter_version": {
+            "const": "runa.agent-auth.v1"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "outcome": {
+            "const": "logout_confirmed"
+          }
+        }
       },
       "AgentSession": {
         "type": "object",
@@ -3653,11 +4110,11 @@
             "minLength": 1,
             "maxLength": 256,
             "pattern": "^[A-Za-z0-9._:-]+$",
-            "description": "Caller-stable Runa client instance identity used for attachment fencing."
+            "description": "Caller-stable Cuna client instance identity used for attachment fencing."
           },
           "resume_handle": {
             "$ref": "#/components/schemas/Uuid",
-            "description": "Previously issued Runa resume handle. Omit for a new attachment generation."
+            "description": "Previously issued Cuna resume handle. Omit for a new attachment generation."
           }
         }
       },
@@ -3684,7 +4141,7 @@
               "unsupported",
               "unknown"
             ],
-            "description": "Explicit Runa observation. Support is never inferred from omission."
+            "description": "Explicit Cuna observation. Support is never inferred from omission."
           }
         }
       },
@@ -3703,7 +4160,7 @@
         "properties": {
           "terminal_session_id": {
             "$ref": "#/components/schemas/Uuid",
-            "description": "Opaque public Runa terminal-session identity."
+            "description": "Opaque public Cuna terminal-session identity."
           },
           "resume_handle": {
             "$ref": "#/components/schemas/Uuid"
@@ -3711,14 +4168,14 @@
           "connect_url": {
             "type": "string",
             "format": "uri",
-            "pattern": "^wss://api\\.runacode\\.io/v1/terminal-connections/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/stream$",
-            "description": "Secret-free Runa WebSocket URL. It contains no token, query, fragment, provider host, or runtime identifier."
+            "pattern": "^wss://api\\.getcuna\\.com/v1/terminal-connections/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/stream$",
+            "description": "Secret-free Cuna WebSocket URL. It contains no token, query, fragment, provider host, or runtime identifier."
           },
           "connect_token": {
             "type": "string",
             "pattern": "^runa_tc_[A-Za-z0-9_-]{43}$",
             "writeOnly": true,
-            "description": "One-use Runa terminal connection token. Plaintext is never persisted and is never placed in connect_url."
+            "description": "One-use Cuna terminal connection token. Plaintext is never persisted and is never placed in connect_url."
           },
           "protocol": {
             "const": "runa.terminal.v1"
@@ -3808,7 +4265,7 @@
                 "maxContains": 1
               }
             ],
-            "description": "Complete explicit Runa capability set. Every known capability appears exactly once with supported, unsupported, or unknown availability."
+            "description": "Complete explicit Cuna capability set. Every known capability appears exactly once with supported, unsupported, or unknown availability."
           },
           "expires_at": {
             "type": "string",
@@ -3946,6 +4403,10 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 65535
+          },
+          "background": {
+            "type": "boolean",
+            "description": "When true, provisioning may continue asynchronously and the 201 response may contain status creating. Omission or false preserves synchronous creation."
           }
         }
       },
@@ -4186,7 +4647,7 @@
         "properties": {
           "url": {
             "type": "string",
-            "pattern": "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.runacode\\.cloud/__runa/auth\\?t=[^&#]+$"
+            "pattern": "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.cunacode\\.cloud/__runa/auth\\?t=[^&#]+$"
           }
         }
       },
@@ -4243,11 +4704,15 @@
                 "additionalProperties": false,
                 "required": [
                   "assigned",
+                  "id",
                   "usage"
                 ],
                 "properties": {
                   "assigned": {
                     "const": true
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/Uuid"
                   },
                   "usage": {
                     "type": "object",
@@ -4354,7 +4819,7 @@
         "properties": {
           "browser_nonce": {
             "type": "string",
-            "pattern": "^runa_cb_[A-Za-z0-9_-]{43}$"
+            "pattern": "^(?:cuna|runa)_cb_[A-Za-z0-9_-]{43}$"
           },
           "state": {
             "type": "string",
@@ -4882,6 +5347,45 @@
           }
         }
       },
+      "WorkspaceSyncChunkContent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "selected_protocol",
+          "digest",
+          "byte_length",
+          "minimum_reader",
+          "content_base64"
+        ],
+        "properties": {
+          "selected_protocol": {
+            "type": "integer",
+            "enum": [
+              1,
+              2
+            ]
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "byte_length": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8388608
+          },
+          "minimum_reader": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2
+          },
+          "content_base64": {
+            "type": "string",
+            "maxLength": 11184812,
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+          }
+        }
+      },
       "WorkspaceSyncCommitReceipt": {
         "type": "object",
         "additionalProperties": false,
@@ -5190,6 +5694,48 @@
           }
         }
       },
+      "WorkspaceSyncChunkContentEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "request_id",
+          "selected_protocol",
+          "capabilities",
+          "data"
+        ],
+        "properties": {
+          "request_id": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "selected_protocol": {
+            "type": "integer",
+            "enum": [
+              1,
+              2
+            ]
+          },
+          "capabilities": {
+            "type": "array",
+            "minItems": 6,
+            "maxItems": 6,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "atomic_generation_commit",
+                "bounded_manifest_pages",
+                "content_digest_verification",
+                "explicit_reconciliation",
+                "ordered_generation_changes",
+                "policy_bound_admission"
+              ]
+            }
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkspaceSyncChunkContent"
+          }
+        }
+      },
       "WorkspaceSyncCommitEnvelope": {
         "type": "object",
         "additionalProperties": false,
@@ -5370,8 +5916,8 @@
     "requestContentTypeWithBody": "application/json; charset=utf-8",
     "responseMediaType": "application/json",
     "responseEncoding": "utf-8",
-    "maxResponseBytes": 8388608,
+    "maxResponseBytes": 16777216,
     "followRedirects": false,
-    "sdkOperationCount": 31
+    "sdkOperationCount": 33
   }
 }
