@@ -1,20 +1,35 @@
-# Runa SDK Contract
+# Cuna SDK Contract
 
-Canonical, auditable contract artifacts shared by the Runa SDK implementations.
+Canonical, auditable contract artifacts shared by the Cuna SDK implementations.
 
-This repository is the local bootstrap of the repository named by PRD-003 as
-`Runa-Laboratories/runa-sdk-contract`. It contains the accepted OpenAPI source,
-the SDK projection, the exact snapshot schema, the snapshot, a baseline
-expectation, detached provenance, and fail-closed verification tools. It does
-not publish a package, call the Runa API, generate public SDK behavior, or
+Canonical product documentation and support live at
+[getcuna.com/docs](https://getcuna.com/docs) and
+[getcuna.com/support](https://getcuna.com/support).
+
+The package identity is `@cuna_labs/sdk-contract`. Existing artifact names,
+`runa-sdk-contract` identifiers, `x-runa-*` OpenAPI extensions, security scheme
+names, key prefixes, and protocol literals remain frozen compatibility
+identifiers. `api.getcuna.com` is the canonical API origin. Historical origins
+embedded in byte-pinned contract artifacts remain evidence, not current public
+endpoints. Removing a frozen origin or renaming any frozen identifier requires
+a versioned contract expansion with producer support and mixed-version
+evidence; this brand-only step does not alter wire behavior.
+
+This is the canonical `Cuna-Labs/cuna-sdk-contract` repository. Byte-pinned
+historical sources retain their original attribution. The repository contains
+the accepted OpenAPI source, the SDK projection, the exact snapshot schema, the
+snapshot, a baseline expectation, detached provenance, and fail-closed
+verification tools. It does
+not publish a package, call the Cuna API, generate public SDK behavior, or
 resolve an undocumented contract fact.
 
 ## Status
 
 Artifact validation is operational. The detached provenance deliberately
-remains `BLOCKED` because no GitHub remote, immutable reviewed pull request, or
-approval commit exists yet. A passing local check proves artifact integrity; it
-does not claim release approval or satisfy the external approval gate.
+remains `BLOCKED` until an immutable reviewed pull request and approval commit
+are recorded. A configured GitHub remote does not satisfy that gate. A passing
+local check proves artifact integrity; it does not claim release approval or
+satisfy the external approval gate.
 
 ## Quick start
 
@@ -28,7 +43,7 @@ npm run check
 Expected final lines include:
 
 ```text
-contract verification: PASS (13 SDK operations; provenance BLOCKED)
+contract verification: PASS (31 SDK operations; provenance BLOCKED)
 workspace source verification: PASS
 ```
 
@@ -55,7 +70,7 @@ npm run verify:workspace-sources
 | `source-artifacts.manifest.json` | Immutable hashes of the workspace inputs used for bootstrap. |
 
 The verifier independently derives the SDK projection from OpenAPI, checks the
-13 exact operation keys, methods, paths, success selectors, schema projection,
+31 exact operation keys, methods, paths, success selectors, schema projection,
 wire policy, canonical JSON bytes, exact snapshot schema, provenance digests,
 and artifact manifest. Mutation tests prove those checks fail closed.
 
@@ -70,7 +85,7 @@ the language's exact empty generated root and emits a detailed digest manifest.
 1. Update the accepted infrastructure contract through its owning review.
 2. Update the PRD-backed snapshot set as one change.
 3. Regenerate canonical JSON bytes and both manifests.
-4. Run `npm run verify:workspace-sources` from the Runa workspace.
+4. Run `npm run verify:workspace-sources` from the Cuna workspace.
 5. Run `npm run check` twice and require a clean diff.
 6. Review the semantic change class and snapshot version under PRD-003.
 7. Only after a real remote review exists, replace the blocked provenance with
@@ -86,9 +101,9 @@ chain.
 ```sh
 node tools/approve-provenance.mjs \
   --canonical-ref <40-hex-M1> \
-  --contract-pr-url https://github.com/Runa-Laboratories/runa-sdk-contract/pull/1 \
+  --contract-pr-url https://github.com/Cuna-Labs/cuna-sdk-contract/pull/1 \
   --contract-merge-sha <40-hex-M1> \
-  --prd002-pr-url https://github.com/Runa-Laboratories/runa-sdk-contract/pull/1 \
+  --prd002-pr-url https://github.com/Cuna-Labs/cuna-sdk-contract/pull/1 \
   --prd002-merge-sha <40-hex-M1>
 ```
 

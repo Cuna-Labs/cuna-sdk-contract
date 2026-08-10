@@ -96,7 +96,7 @@ test("R-003-20 enforces the current provenance state", async () => {
 test("R-003-15 validates approval transition or the immutable approved record", async () => {
   const current = await loadBundle(path.resolve("."));
   const revision = "a".repeat(40);
-  const url = "https://github.com/Runa-Laboratories/runa-sdk-contract/pull/1";
+  const url = "https://github.com/Cuna-Labs/cuna-sdk-contract/pull/1";
   const result = spawnSync(process.execPath, ["tools/approve-provenance.mjs", "--dry-run",
     "--canonical-ref", revision, "--contract-pr-url", url, "--contract-merge-sha", revision,
     "--prd002-pr-url", url, "--prd002-merge-sha", revision], { encoding: "utf8" });
@@ -112,7 +112,18 @@ test("R-003-15 validates approval transition or the immutable approved record", 
     assert.match(result.stderr, /provenance is not in BLOCKED state/u);
     assert.match(current.provenance.canonical_ref, /^[a-f0-9]{40}$/u);
     assert.match(current.provenance.approval_reference.contract_pull_request_url,
-      /^https:\/\/github\.com\/Runa-Laboratories\/runa-sdk-contract\/pull\/\d+$/u);
+      /^https:\/\/github\.com\/Cuna-Labs\/cuna-sdk-contract\/pull\/\d+$/u);
     validateBundle(current);
   }
+});
+
+test("R-003-15 rejects approval URLs outside the canonical repository", () => {
+  const revision = "a".repeat(40);
+  const attacker = "https://github.com/attacker/cuna-sdk-contract/pull/1";
+  const result = spawnSync(process.execPath, ["tools/approve-provenance.mjs", "--dry-run",
+    "--canonical-ref", revision, "--contract-pr-url", attacker,
+    "--contract-merge-sha", revision, "--prd002-pr-url", attacker,
+    "--prd002-merge-sha", revision], { encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /R-003-15/u);
 });

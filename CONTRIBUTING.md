@@ -6,7 +6,7 @@ approval evidence.
 
 Before proposing a change:
 
-1. Run `npm run verify:workspace-sources` in the parent Runa workspace.
+1. Run `npm run verify:workspace-sources` in the parent Cuna workspace.
 2. Run `npm run check`.
 3. Confirm `git diff --check` and `git status --short` are clean after the
    intended files are staged.

@@ -1,8 +1,12 @@
 {
-  "name": "@runa/sdk-contract",
+  "name": "@cuna_labs/sdk-contract",
   "version": "0.1.0",
   "private": true,
-  "description": "Canonical, auditable Runa SDK contract artifacts and verification tools.",
+  "description": "Canonical, auditable Cuna SDK contract artifacts and verification tools.",
+  "homepage": "https://getcuna.com",
+  "bugs": {
+    "url": "https://getcuna.com/support"
+  },
   "license": "Apache-2.0",
   "type": "module",
   "engines": {

@@ -9,12 +9,12 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const baseline = await loadBundle(root);
 const clone = () => structuredClone(baseline);
 
-test("TC-003-01 validates 13 binding-complete descriptors and five canonical artifacts", async () => {
+test("TC-003-01 validates 31 binding-complete descriptors and 16 canonical artifacts", async () => {
   await validateCanonicalArtifacts(root);
   await validateManifest(root, baseline.manifest);
   const report = validateBundle(baseline);
   assert.equal(report.status, "PASS");
-  assert.equal(report.operationKeys.length, 13);
+  assert.equal(report.operationKeys.length, 31);
   assert.equal(new Set(["BLOCKED", "APPROVED"]).has(report.provenanceStatus), true);
   for (const operation of baseline.snapshot.operations) {
     assert.deepEqual(Object.keys(operation).sort(), ["error_facts", "http_binding", "method", "operation_key", "path_parameters", "path_template", "request", "source_refs", "success", "unresolved_refs"].sort());
@@ -26,6 +26,18 @@ test("RFC 8785 currentness canonicalizer passes Appendix-B number vectors", () =
     '{"a":333333333.3333333,"b":1e+30,"c":4.5,"d":0.002,"e":1e-27}');
   assert.throws(() => canonicalJson(Number.NaN), /non-finite/u);
   assert.throws(() => canonicalJson("\ud800"), /lone Unicode surrogate/u);
+});
+
+test("canonical Cuna identity and the exact legacy repository are allowed fail-closed", () => {
+  assert.equal(baseline.provenance.canonical_repository, "Cuna-Labs/cuna-sdk-contract");
+  assert.deepEqual(baseline.provenanceSchema.properties.canonical_repository.enum,
+    ["Cuna-Labs/cuna-sdk-contract", "Runa-Laboratories/runa-sdk-contract"]);
+  const legacy = clone();
+  legacy.provenance.canonical_repository = "Runa-Laboratories/runa-sdk-contract";
+  assert.equal(validateBundle(legacy).status, "PASS");
+  const attacker = clone();
+  attacker.provenance.canonical_repository = "attacker/cuna-sdk-contract";
+  assert.throws(() => validateBundle(attacker), /R-003-13/u);
 });
 
 test("TC-003-12 rejects status, media, UTF-8, header, cap, redirect, schema, and UUID mutations for every descriptor", () => {

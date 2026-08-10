@@ -41,7 +41,7 @@ function cells(line) {
 
 const operations = [];
 for (const line of baseline.split(/\r?\n/u)) {
-  if (!/^\| `(?:me|records|sessions)\.[a-z]+` \|/u.test(line)) continue;
+  if (!/^\| `[A-Za-z]+(?:\.[A-Za-z]+)+` \|/u.test(line)) continue;
   const row = cells(line);
   const operationKey = row[0].replaceAll("`", "");
   const method = row[1].replaceAll("`", "");
@@ -52,7 +52,7 @@ for (const line of baseline.split(/\r?\n/u)) {
     method,
     operation_key: operationKey,
     path: route,
-    path_parameters: route.includes(":id") ? ["id"] : [],
+    path_parameters: [...route.matchAll(/:([A-Za-z_]+)/gu)].map((match) => match[1]),
     request_shape: row[4],
     source_ref: `PRD-002#6.1/table:${operationKey}`,
     success_shape: row[5],
@@ -60,7 +60,7 @@ for (const line of baseline.split(/\r?\n/u)) {
   });
 }
 operations.sort((left, right) => left.operation_key.localeCompare(right.operation_key));
-if (operations.length !== 13 || new Set(operations.map((item) => item.operation_key)).size !== 13) {
+if (operations.length !== 31 || new Set(operations.map((item) => item.operation_key)).size !== 31) {
   throw new Error("R-003-27: PRD-002 operation extraction is incomplete or duplicated.");
 }
 
@@ -97,7 +97,7 @@ for (const line of baseline.split(/\r?\n/u)) {
   });
 }
 openQuestions.sort((left, right) => left.id.localeCompare(right.id));
-if (openQuestions.length !== 8 || new Set(openQuestions.map((item) => item.id)).size !== 8) {
+if (openQuestions.length !== 12 || new Set(openQuestions.map((item) => item.id)).size !== 12) {
   throw new Error("R-003-27: PRD-002 question extraction is incomplete or duplicated.");
 }
 
