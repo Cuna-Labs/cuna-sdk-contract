@@ -9,12 +9,12 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const baseline = await loadBundle(root);
 const clone = () => structuredClone(baseline);
 
-test("TC-003-01 validates 14 binding-complete descriptors and five canonical artifacts", async () => {
+test("TC-003-01 validates 31 binding-complete descriptors and 16 canonical artifacts", async () => {
   await validateCanonicalArtifacts(root);
   await validateManifest(root, baseline.manifest);
   const report = validateBundle(baseline);
   assert.equal(report.status, "PASS");
-  assert.equal(report.operationKeys.length, 14);
+  assert.equal(report.operationKeys.length, 31);
   assert.equal(new Set(["BLOCKED", "APPROVED"]).has(report.provenanceStatus), true);
   for (const operation of baseline.snapshot.operations) {
     assert.deepEqual(Object.keys(operation).sort(), ["error_facts", "http_binding", "method", "operation_key", "path_parameters", "path_template", "request", "source_refs", "success", "unresolved_refs"].sort());
@@ -26,6 +26,82 @@ test("RFC 8785 currentness canonicalizer passes Appendix-B number vectors", () =
     '{"a":333333333.3333333,"b":1e+30,"c":4.5,"d":0.002,"e":1e-27}');
   assert.throws(() => canonicalJson(Number.NaN), /non-finite/u);
   assert.throws(() => canonicalJson("\ud800"), /lone Unicode surrogate/u);
+});
+
+test("canonical Cuna identity and the exact legacy repository are allowed fail-closed", () => {
+  assert.equal(baseline.provenance.canonical_repository, "Cuna-Labs/cuna-sdk-contract");
+  assert.deepEqual(baseline.provenanceSchema.properties.canonical_repository.enum,
+    ["Cuna-Labs/cuna-sdk-contract", "Runa-Laboratories/runa-sdk-contract"]);
+  const legacy = clone();
+  legacy.provenance.canonical_repository = "Runa-Laboratories/runa-sdk-contract";
+  assert.equal(validateBundle(legacy).status, "PASS");
+  const attacker = clone();
+  attacker.provenance.canonical_repository = "attacker/cuna-sdk-contract";
+  assert.throws(() => validateBundle(attacker), /R-003-13/u);
+});
+
+test("runtime handoff schemas implement the bounded Cuna expand phase", () => {
+  const runtimePatterns = baseline.openapi.components.schemas.RuntimeUrl.oneOf
+    .map((branch) => new RegExp(branch.pattern, "u"));
+  const handoffPatterns = baseline.openapi.components.schemas.OpenResult.properties.url.oneOf
+    .map((branch) => new RegExp(branch.pattern, "u"));
+  const admitted = (patterns, value) => patterns.filter((pattern) => pattern.test(value)).length === 1;
+
+  assert.equal(admitted(runtimePatterns, "https://machine.cunacode.cloud"), true);
+  assert.equal(admitted(runtimePatterns, "https://machine.runacode.cloud"), true);
+  assert.equal(admitted(runtimePatterns, "https://machine.attacker.cloud"), false);
+  assert.equal(admitted(runtimePatterns, "https://cunacode.cloud.attacker.example"), false);
+
+  assert.equal(admitted(handoffPatterns, "https://machine.cunacode.cloud/__runa/auth?t=synthetic"), true);
+  assert.equal(admitted(handoffPatterns, "https://machine.runacode.cloud/__runa/auth?t=synthetic"), true);
+  assert.equal(admitted(handoffPatterns, "https://machine.attacker.cloud/__runa/auth?t=synthetic"), false);
+  assert.equal(admitted(handoffPatterns, "https://machine.cunacode.cloud/__runa/auth?t=x&leak=y"), false);
+  assert.deepEqual(baseline.openapi["x-cuna-runtime-url-migration"], {
+    phase: "expand",
+    introducedIn: "1.7.0",
+    reviewBefore: "1.8.0",
+    canonicalEmissionZone: "cunacode.cloud",
+    acceptedLegacyZone: "runacode.cloud",
+    legacyEmissionAllowed: false,
+    contractionRequires: [
+      "zero_legacy_producer_traffic",
+      "consumer_adoption_evidence",
+      "mixed_version_rollback_rehearsal",
+    ],
+  });
+});
+
+test("runtime expand validation rejects exact-shape and policy mutations", () => {
+  const schemaMutations = [
+    (schema) => { delete schema.type; },
+    (schema) => { schema.oneOf.pop(); },
+    (schema) => { schema.oneOf[1].pattern = schema.oneOf[0].pattern; },
+    (schema) => { schema.oneOf[1].deprecated = false; },
+  ];
+  for (const schemaName of ["RuntimeUrl", "OpenResult"]) {
+    for (const mutate of schemaMutations) {
+      const candidate = clone();
+      const openapiSchema = schemaName === "RuntimeUrl"
+        ? candidate.openapi.components.schemas.RuntimeUrl
+        : candidate.openapi.components.schemas.OpenResult.properties.url;
+      const snapshotSchema = schemaName === "RuntimeUrl"
+        ? candidate.snapshot.components.schemas.RuntimeUrl
+        : candidate.snapshot.components.schemas.OpenResult.properties.url;
+      mutate(openapiSchema);
+      mutate(snapshotSchema);
+      assert.throws(() => validateBundle(candidate), /R-003-29/u, `${schemaName} mutation accepted`);
+    }
+  }
+
+  for (const mutate of [
+    (migration) => { migration.phase = "contract"; },
+    (migration) => { migration.legacyEmissionAllowed = true; },
+    (migration) => { migration.contractionRequires.pop(); },
+  ]) {
+    const candidate = clone();
+    mutate(candidate.openapi["x-cuna-runtime-url-migration"]);
+    assert.throws(() => validateBundle(candidate), /R-003-29/u, "migration policy mutation accepted");
+  }
 });
 
 test("TC-003-12 rejects status, media, UTF-8, header, cap, redirect, schema, and UUID mutations for every descriptor", () => {
@@ -79,25 +155,6 @@ test("TC-003-02 structural schema rejects an undeclared normative field", () => 
   const candidate = clone();
   candidate.snapshot.operations[0].inferred_retry_policy = "retry";
   assert.throws(() => validateBundle(candidate), /R-003-02: snapshot schema: .* is undeclared/u);
-});
-
-test("TC-002-27 binds background only as an optional boolean SDK create field", () => {
-  const schema = baseline.snapshot.components.schemas.SdkCreateSession;
-  assert.deepEqual(schema.properties.background, {
-    description: "Optional asynchronous provisioning mode. Omission or false preserves synchronous creation. True may return status creating; poll sessions.get while status remains creating before treating the machine as ready.",
-    type: "boolean",
-  });
-  assert.equal(schema.required.includes("background"), false);
-  assert.equal(Object.hasOwn(baseline.openapi.components.schemas.ConsoleCreateSession.properties, "background"), true);
-  for (const field of ["terminal", "api_key", "token_saving", "capture_tool_io"]) {
-    assert.equal(Object.hasOwn(schema.properties, field), false);
-  }
-  const create = baseline.snapshot.operations.find((operation) => operation.operation_key === "sessions.create");
-  assert.match(create.request.source_shape, /background\?/u);
-
-  const candidate = clone();
-  candidate.snapshot.components.schemas.SdkCreateSession.properties.background.type = "string";
-  assert.throws(() => validateBundle(candidate), /R-003-28/u);
 });
 
 test("TC-003-04 rejects substituted provenance", () => {

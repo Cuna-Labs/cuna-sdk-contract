@@ -41,12 +41,24 @@ const bundle = await loadBundle(root);
 validateBundle(bundle);
 const snapshotBytes = await readFile(path.join(root, "runa-sdk-contract.snapshot.json"));
 const snapshotSha256 = sha256(snapshotBytes);
+const sdkProjectionPath = "runa-sdk.projection.json";
+const sdkProjectionBytes = await readFile(path.join(root, sdkProjectionPath));
+const sdkProjectionSha256 = sha256(sdkProjectionBytes);
+const sdkProjection = JSON.parse(sdkProjectionBytes.toString("utf8"));
+if (sdkProjection?.contractVersion !== bundle.openapi.info?.version ||
+    sdkProjection?.wire?.sdkOperationCount !== Object.keys(sdkProjection.operations ?? {}).length ||
+    sdkProjection?.schemas === null || typeof sdkProjection?.schemas !== "object") {
+  throw new Error("R-003-12: SDK projection does not match the accepted OpenAPI contract.");
+}
 const generatorSha256 = sha256(await readFile(ownPath));
 const header = {
   contract_id: "runa-sdk-contract",
   generator_path: "tools/runa-contract-generator.mjs",
   generator_sha256: generatorSha256,
   generator_version: GENERATOR_VERSION,
+  projection_path: sdkProjectionPath,
+  projection_sha256: sdkProjectionSha256,
+  projection_version: sdkProjection.contractVersion,
   snapshot_path: "runa-sdk-contract.snapshot.json",
   snapshot_sha256: snapshotSha256,
   snapshot_version: bundle.snapshot.snapshot_version,
@@ -55,16 +67,17 @@ const expectedRoot = bundle.snapshot.generator_configuration.generated_roots[lan
 if (!output.endsWith(expectedRoot.slice(0, -1))) {
   throw new Error(`R-003-12: output must end in ${bundle.snapshot.generator_configuration.generated_roots[language]}`);
 }
-const operationRows = bundle.snapshot.operations.map((operation) => ({
-    hasRequestBody: operation.request.body_presence === "required",
+const operationRows = Object.entries(sdkProjection.operations).sort(([left], [right]) =>
+  left.localeCompare(right)).map(([operationKey, operation]) => ({
+    hasRequestBody: operation.requestBody !== null,
     method: operation.method,
-    operationKey: operation.operation_key,
-    pathParameters: operation.path_parameters.map((item) => item.name),
-    pathTemplate: operation.path_template,
-    successStatus: operation.success.selector.status,
+    operationKey,
+    pathParameters: [...operation.path.matchAll(/\{([^}]+)\}/gu)].map((match) => match[1]),
+    pathTemplate: operation.path.replaceAll(/\{([^}]+)\}/gu, ":$1"),
+    successStatus: operation.successStatus,
   }));
 const metadata = Object.fromEntries(operationRows.map((item) => [item.operationKey, item]));
-const wireSchemas = bundle.snapshot.components.schemas;
+const wireSchemas = sdkProjection.schemas;
 
 const files = language === "typescript" ? {
   "index.ts": `// @generated ${generatorJcs(header)}\nexport { GENERATED_OPERATIONS } from "./operation-metadata.js";\nexport type { GeneratedWireValue } from "./wire-types.js";\nexport { serializeGeneratedRequest } from "./serializers.js";\nexport { deserializeGeneratedResponse } from "./deserializers.js";\n`,
@@ -99,6 +112,11 @@ const manifest = generatorJcs({
     version: GENERATOR_VERSION,
   },
   language,
+  projection: {
+    path: sdkProjectionPath,
+    sha256: sdkProjectionSha256,
+    version: sdkProjection.contractVersion,
+  },
   schema_version: 1,
   snapshot: {
     path: "runa-sdk-contract.snapshot.json",

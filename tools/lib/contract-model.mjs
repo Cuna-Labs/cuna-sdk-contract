@@ -5,9 +5,16 @@ import { canonicalBytes, canonicalJson, sha256 } from "./canonical-json.mjs";
 
 export const EXPECTED = "runa-sdk-contract.prd002-expected-manifest.json";
 export const PROJECTION = "runa-sdk-contract.prd002-projection.json";
+export const CURRENT_CONTRACT_REPOSITORY = "Cuna-Labs/cuna-sdk-contract";
+export const LEGACY_CONTRACT_REPOSITORY = "Runa-Laboratories/runa-sdk-contract";
+export const CONTRACT_REPOSITORIES = Object.freeze([
+  CURRENT_CONTRACT_REPOSITORY,
+  LEGACY_CONTRACT_REPOSITORY,
+]);
 export const ARTIFACT_SPEC = Object.freeze({
   "runa-api.openapi.json": ["application/vnd.oai.openapi+json", "source-openapi"],
   "runa-api.openapi.sha256": ["text/plain", "canonical-openapi-digest"],
+  "runa-sdk.projection.json": ["application/json", "canonical-sdk-projection"],
   [EXPECTED]: ["application/json", "independent-baseline-expectation"],
   [PROJECTION]: ["application/json", "prd002-contract-projection"],
   "runa-sdk-contract.provenance.json": ["application/json", "detached-provenance"],
@@ -29,19 +36,70 @@ export const CANONICAL_JSON_ARTIFACTS = Object.freeze([
   "runa-sdk-contract.snapshot.schema.json", "source-artifacts.manifest.json",
 ]);
 export const OPERATION_KEYS = Object.freeze([
-  "me.get", "records.list", "sessions.agentAuth", "sessions.checkpoint", "sessions.create", "sessions.delete",
-  "sessions.exec", "sessions.get", "sessions.list", "sessions.open", "sessions.pause",
-  "sessions.resume", "sessions.start", "sessions.stop",
+  "agentSessions.create", "agentSessions.createTerminalConnection", "agentSessions.get", "agentSessions.list",
+  "agentSessions.rename", "agentSessions.terminate", "capabilities.get", "machineCreates.get",
+  "machineCreates.reconcile", "me.get", "records.list", "sessions.agentAuth", "sessions.checkpoint",
+  "sessions.create", "sessions.delete", "sessions.exec", "sessions.get", "sessions.list", "sessions.open",
+  "sessions.pause", "sessions.resume", "sessions.start", "sessions.stop", "workspaceBindings.create",
+  "workspaceBindings.get", "workspaces.sync.begin", "workspaces.sync.changes", "workspaces.sync.chunk",
+  "workspaces.sync.commit", "workspaces.sync.negotiate", "workspaces.sync.reconcile",
 ]);
 const COMPONENTS = Object.freeze([
-  "AgentAuth", "CheckpointRequest", "Error", "ExecRequest", "ExecResult", "Me", "Ok", "OpenResult",
-  "OutboundPolicy", "Record", "RuntimeUrl", "SdkCreateSession", "Session", "Uuid",
+  "AgentAuth", "AgentSession", "AgentSessionCreate", "AgentSessionPage", "AgentSessionRename", "Capability",
+  "CapabilitySnapshot", "CheckpointRequest", "Error", "ExecRequest", "ExecResult", "MachineCreateRequest", "Me",
+  "Ok", "OpenResult", "OutboundPolicy", "Problem", "Record", "RuntimeUrl", "SdkCreateSession", "Session",
+  "TerminalConnectionCapability", "TerminalConnectionCreate", "TerminalConnectionGrant", "Uuid", "WorkspaceBinding",
+  "WorkspaceBindingCreate", "WorkspaceSyncBegin", "WorkspaceSyncChangeEnvelope", "WorkspaceSyncChangeItem",
+  "WorkspaceSyncChangePage", "WorkspaceSyncChunkEnvelope", "WorkspaceSyncChunkReceipt", "WorkspaceSyncChunkRef",
+  "WorkspaceSyncCommit", "WorkspaceSyncCommitEnvelope", "WorkspaceSyncCommitReceipt", "WorkspaceSyncManifestEntry",
+  "WorkspaceSyncManifestEnvelope", "WorkspaceSyncManifestPage", "WorkspaceSyncManifestReceipt", "WorkspaceSyncProblem",
+  "WorkspaceSyncProtocolRange", "WorkspaceSyncReconcile", "WorkspaceSyncReconcileEnvelope",
+  "WorkspaceSyncReconcileReceipt", "WorkspaceSyncSession", "WorkspaceSyncSessionEnvelope",
 ]);
 const SOURCE_BASELINE = "sources/PRD-002-rest-contract-baseline.md";
 const GENERATOR = "tools/runa-contract-generator.mjs";
 const EXTRACTOR = "tools/extract-prd002-expectations.mjs";
 const fail = (requirement, artifact, detail) => { throw new Error(`${requirement}: ${artifact}: ${detail}`); };
 const same = (left, right) => canonicalJson(left) === canonicalJson(right);
+const CANONICAL_RUNTIME_URL_PATTERN =
+  "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.cunacode\\.cloud$";
+const LEGACY_RUNTIME_URL_PATTERN =
+  "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.runacode\\.cloud$";
+const CANONICAL_HANDOFF_URL_PATTERN =
+  "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.cunacode\\.cloud/__runa/auth\\?t=[^&#]+$";
+const LEGACY_HANDOFF_URL_PATTERN =
+  "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.runacode\\.cloud/__runa/auth\\?t=[^&#]+$";
+const EXPECTED_RUNTIME_URL_MIGRATION = Object.freeze({
+  phase: "expand",
+  introducedIn: "1.7.0",
+  reviewBefore: "1.8.0",
+  canonicalEmissionZone: "cunacode.cloud",
+  acceptedLegacyZone: "runacode.cloud",
+  legacyEmissionAllowed: false,
+  contractionRequires: [
+    "zero_legacy_producer_traffic",
+    "consumer_adoption_evidence",
+    "mixed_version_rollback_rehearsal",
+  ],
+});
+
+function validateRuntimeUrlMigration(openapi) {
+  const runtimeUrl = openapi.components?.schemas?.RuntimeUrl;
+  const handoffUrl = openapi.components?.schemas?.OpenResult?.properties?.url;
+  const expectedRuntimeOneOf = [
+    { title: "Canonical Cuna runtime URL", pattern: CANONICAL_RUNTIME_URL_PATTERN },
+    { title: "Deprecated legacy runtime URL", deprecated: true, pattern: LEGACY_RUNTIME_URL_PATTERN },
+  ];
+  const expectedHandoffOneOf = [
+    { title: "Canonical Cuna handoff URL", pattern: CANONICAL_HANDOFF_URL_PATTERN },
+    { title: "Deprecated legacy handoff URL", deprecated: true, pattern: LEGACY_HANDOFF_URL_PATTERN },
+  ];
+  if (runtimeUrl?.type !== "string" || !same(runtimeUrl.oneOf, expectedRuntimeOneOf) ||
+      handoffUrl?.type !== "string" || !same(handoffUrl.oneOf, expectedHandoffOneOf) ||
+      !same(openapi["x-cuna-runtime-url-migration"], EXPECTED_RUNTIME_URL_MIGRATION)) {
+    fail("R-003-29", "openapi", "bounded runtime URL expand phase differs");
+  }
+}
 
 function resolveLocalRef(document, value) {
   if (value?.$ref === undefined) return value;
@@ -169,28 +227,34 @@ function validateSnapshot(snapshot, openapi) {
   }
   const openOperations = openApiOperations(openapi);
   const operationKeys = snapshot.operations.map((item) => item.operation_key);
-  if (!same(operationKeys, OPERATION_KEYS) || new Set(operationKeys).size !== 14) fail("R-003-03", "snapshot.operations", "exact operation catalog differs");
+  if (!same(operationKeys, OPERATION_KEYS) || new Set(operationKeys).size !== 31) fail("R-003-03", "snapshot.operations", "exact operation catalog differs");
   const descriptorKeys = ["error_facts", "http_binding", "method", "operation_key", "path_parameters", "path_template", "request", "source_refs", "success", "unresolved_refs"].sort();
-  const exactHttp = { accept: "application/json", authorization_scheme: "Bearer", content_type_with_body: "application/json; charset=utf-8", follow_redirects: false, max_response_bytes: 8_388_608, response_encoding: "utf-8", response_media_type: "application/json", source_ref: "PRD-002#6.1.1" };
   for (const descriptor of snapshot.operations) {
     const source = openOperations.get(descriptor.operation_key);
     if (!same(Object.keys(descriptor).sort(), descriptorKeys) || source === undefined) fail("R-003-28", `snapshot.operations.${descriptor.operation_key}`, "descriptor is not binding-complete");
-    if (descriptor.method !== source.method || descriptor.path_template !== source.route.replaceAll("{id}", ":id")) fail("R-003-03", `snapshot.operations.${descriptor.operation_key}`, "method/path differs (PRD-002#6.1)");
+    const normalizedPath = source.route.replace(/\{([^}]+)\}/gu, ":$1");
+    if (descriptor.method !== source.method || descriptor.path_template !== normalizedPath) fail("R-003-03", `snapshot.operations.${descriptor.operation_key}`, "method/path differs (PRD-002#6.1)");
+    const binaryRequest = source.operation.requestBody?.content?.["application/octet-stream"]?.schema ?? null;
+    const exactHttp = { accept: "application/json", authorization_scheme: "Bearer", content_type_with_body: binaryRequest === null ? "application/json; charset=utf-8" : "application/octet-stream", follow_redirects: false, max_response_bytes: 8_388_608, response_encoding: "utf-8", response_media_type: "application/json", source_ref: "PRD-002#6.1.1" };
     if (!same(descriptor.http_binding, exactHttp)) fail("R-003-28", `snapshot.operations.${descriptor.operation_key}.http_binding`, "wire binding differs (PRD-002#6.1.1)");
-    const expectedStatus = descriptor.operation_key === "sessions.create" ? 201 : 200;
+    const successStatuses = Object.keys(source.operation.responses).filter((status) => status !== "default");
+    if (successStatuses.length !== 1) fail("R-003-28", `snapshot.operations.${descriptor.operation_key}.success`, "success status is not singular");
+    const expectedStatus = Number(successStatuses[0]);
     if (!same(descriptor.success.selector, { kind: "exact", status: expectedStatus }) || descriptor.success.media_type !== "application/json" || descriptor.success.encoding !== "utf-8") fail("R-003-28", `snapshot.operations.${descriptor.operation_key}.success`, "success selector/media differs (PRD-002#6.1)");
-    const expectedRequest = source.operation["x-sdk-request-schema"] ?? source.operation.requestBody?.content?.["application/json; charset=utf-8"]?.schema ?? null;
+    const expectedRequest = source.operation["x-sdk-request-schema"] ?? source.operation.requestBody?.content?.["application/json; charset=utf-8"]?.schema ?? binaryRequest;
     if (!same(descriptor.request.schema, expectedRequest)) fail("R-003-28", `snapshot.operations.${descriptor.operation_key}.request.schema`, "typed request differs (PRD-002#6.1.1)");
     if (expectedRequest === null) {
       if (descriptor.request.body_presence !== "absent" || descriptor.request.body_bytes !== "none" || descriptor.request.content_type_rule !== "omit" || descriptor.request.media_type !== null || descriptor.request.encoding !== null) fail("R-003-28", `snapshot.operations.${descriptor.operation_key}.request`, "body omission differs (PRD-002#6.1.1)");
+    } else if (binaryRequest !== null) {
+      if (descriptor.request.body_presence !== "required" || descriptor.request.body_bytes !== "binary" || descriptor.request.content_type_rule !== "send" || descriptor.request.media_type !== "application/octet-stream" || descriptor.request.encoding !== null) fail("R-003-28", `snapshot.operations.${descriptor.operation_key}.request`, "binary body binding differs (PRD-002#6.1.1)");
     } else if (descriptor.request.body_presence !== "required" || descriptor.request.body_bytes !== "one-json-value" || descriptor.request.content_type_rule !== "send" || descriptor.request.media_type !== "application/json; charset=utf-8" || descriptor.request.encoding !== "utf-8") fail("R-003-28", `snapshot.operations.${descriptor.operation_key}.request`, "body binding differs (PRD-002#6.1.1)");
     const expectedResponse = resolveLocalRef(openapi, source.operation.responses[String(expectedStatus)]).content["application/json"].schema;
     if (!same(descriptor.success.schema, expectedResponse)) fail("R-003-28", `snapshot.operations.${descriptor.operation_key}.success.schema`, "typed response differs (PRD-002#6.1.1)");
     const names = [...source.route.matchAll(/\{([^}]+)\}/gu)].map((match) => match[1]);
     if (!same(descriptor.path_parameters.map((item) => item.name), names)) fail("R-003-28", `snapshot.operations.${descriptor.operation_key}.path_parameters`, "path parameters differ");
     for (const parameter of descriptor.path_parameters) {
-      const renderer = { case_fold: false, format: "uuid", pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", percent_encode: false, segment_count: 1, substitution: "unchanged", trim: false, type: "string", unicode_normalize: false };
-      if (!same(parameter.renderer, renderer)) fail("R-003-28", `snapshot.operations.${descriptor.operation_key}.path_parameters.id`, "UUID renderer differs (PRD-002#6.1.1)");
+      const renderer = { case_fold: false, format: parameter.name === "digest" ? "sha256" : "uuid", pattern: parameter.name === "digest" ? "^[0-9a-f]{64}$" : "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", percent_encode: false, segment_count: 1, substitution: "unchanged", trim: false, type: "string", unicode_normalize: false };
+      if (!same(parameter.renderer, renderer)) fail("R-003-28", `snapshot.operations.${descriptor.operation_key}.path_parameters.${parameter.name}`, "path renderer differs (PRD-002#6.1.1)");
     }
     for (const unresolved of descriptor.unresolved_refs) {
       if (!same(Object.keys(unresolved).sort(), ["evidence_state", "question_id", "source_ref"].sort()) || unresolved.evidence_state !== "unresolved") fail("R-003-06", `snapshot.operations.${descriptor.operation_key}.unresolved_refs`, "unresolved value asserted");
@@ -212,7 +276,9 @@ function validateProvenance(bundle) {
     snapshot: { path: "runa-sdk-contract.snapshot.json", sha256: sha256(bundle.snapshotBytes) },
     snapshot_schema: { path: "runa-sdk-contract.snapshot.schema.json", sha256: sha256(bundle.schemaBytes) },
   };
-  if (value.schema_version !== 3 || value.contract_id !== "runa-sdk-contract" || value.snapshot_version !== bundle.snapshot.snapshot_version ||
+  if (value.schema_version !== 3 || value.contract_id !== "runa-sdk-contract" ||
+      !CONTRACT_REPOSITORIES.includes(value.canonical_repository) ||
+      value.snapshot_version !== bundle.snapshot.snapshot_version ||
       value.accepted_baseline_sha256 !== sha256(bundle.baselineSourceBytes) || !same(value.artifacts, artifacts) ||
       value.generation_command_id !== "runa-contract-generator/v1" ||
       !same({ ...value.generator_identity, git_commit_sha: null }, { git_commit_sha: null, node_major: 24, path: GENERATOR, sha256: sha256(bundle.generatorBytes), version: "0.2.0" }) ||
@@ -225,7 +291,8 @@ function validateProvenance(bundle) {
   } else if (value.status === "APPROVED") {
     const approval = value.approval_reference;
     const sha = /^[a-f0-9]{40}$/u;
-    const url = /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+$/u;
+    const escapedRepository = value.canonical_repository.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    const url = new RegExp(`^https://github\\.com/${escapedRepository}/pull/[1-9][0-9]*$`, "u");
     if (!sha.test(value.canonical_ref ?? "") || !sha.test(value.source_revision ?? "") || value.reason !== null ||
         value.generator_identity.git_commit_sha !== value.canonical_ref || value.baseline_extractor_identity.git_commit_sha !== value.canonical_ref ||
         approval === null || !sha.test(approval.contract_merge_commit_sha ?? "") || !sha.test(approval.prd002_merge_commit_sha ?? "") ||
@@ -236,6 +303,7 @@ function validateProvenance(bundle) {
 
 export function validateBundle(bundle) {
   if (bundle.schema?.["x-schema-format-version"] !== 1 || bundle.schema?.additionalProperties !== false || bundle.schema?.$defs?.operation?.additionalProperties !== false || !bundle.schema?.$defs?.unresolved?.properties?.evidence_state) fail("R-003-02", "snapshot schema", "structural closure/evidence enum missing");
+  validateRuntimeUrlMigration(bundle.openapi);
   validateStructuralSchema(bundle.schema, bundle.snapshot);
   validateSnapshot(bundle.snapshot, bundle.openapi);
   if (bundle.expected.accepted_baseline?.path !== SOURCE_BASELINE || bundle.expected.accepted_baseline?.sha256 !== sha256(bundle.baselineSourceBytes)) fail("R-003-13", EXPECTED, "accepted baseline digest differs");
