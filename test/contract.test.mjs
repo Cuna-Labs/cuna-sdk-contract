@@ -40,6 +40,37 @@ test("canonical Cuna identity and the exact legacy repository are allowed fail-c
   assert.throws(() => validateBundle(attacker), /R-003-13/u);
 });
 
+test("runtime handoff schemas implement the bounded Cuna expand phase", () => {
+  const runtimePatterns = baseline.openapi.components.schemas.RuntimeUrl.oneOf
+    .map((branch) => new RegExp(branch.pattern, "u"));
+  const handoffPatterns = baseline.openapi.components.schemas.OpenResult.properties.url.oneOf
+    .map((branch) => new RegExp(branch.pattern, "u"));
+  const admitted = (patterns, value) => patterns.filter((pattern) => pattern.test(value)).length === 1;
+
+  assert.equal(admitted(runtimePatterns, "https://machine.cunacode.cloud"), true);
+  assert.equal(admitted(runtimePatterns, "https://machine.runacode.cloud"), true);
+  assert.equal(admitted(runtimePatterns, "https://machine.attacker.cloud"), false);
+  assert.equal(admitted(runtimePatterns, "https://cunacode.cloud.attacker.example"), false);
+
+  assert.equal(admitted(handoffPatterns, "https://machine.cunacode.cloud/__runa/auth?t=synthetic"), true);
+  assert.equal(admitted(handoffPatterns, "https://machine.runacode.cloud/__runa/auth?t=synthetic"), true);
+  assert.equal(admitted(handoffPatterns, "https://machine.attacker.cloud/__runa/auth?t=synthetic"), false);
+  assert.equal(admitted(handoffPatterns, "https://machine.cunacode.cloud/__runa/auth?t=x&leak=y"), false);
+  assert.deepEqual(baseline.openapi["x-cuna-runtime-url-migration"], {
+    phase: "expand",
+    introducedIn: "1.7.0",
+    reviewBefore: "1.8.0",
+    canonicalEmissionZone: "cunacode.cloud",
+    acceptedLegacyZone: "runacode.cloud",
+    legacyEmissionAllowed: false,
+    contractionRequires: [
+      "zero_legacy_producer_traffic",
+      "consumer_adoption_evidence",
+      "mixed_version_rollback_rehearsal",
+    ],
+  });
+});
+
 test("TC-003-12 rejects status, media, UTF-8, header, cap, redirect, schema, and UUID mutations for every descriptor", () => {
   const mutations = [
     (operation) => { operation.success.selector.status = 299; },

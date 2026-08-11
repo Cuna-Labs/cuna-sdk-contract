@@ -100,7 +100,7 @@ if (process.argv.includes("--refresh-blocked")) {
       sha256: sha256(await readFile(path.join(root, "tools/runa-contract-generator.mjs"))),
       version: snapshot.generator_configuration.generator_version,
     },
-    reason: `OpenAPI ${snapshot.snapshot_version} additive AgentAuth and workspace authority contract awaits immutable reviewed approval.`,
+    reason: `OpenAPI ${snapshot.snapshot_version} additive authorities and bounded Cuna runtime expand phase await immutable reviewed approval.`,
     semantic_change_class: "additive",
     snapshot_version: snapshot.snapshot_version,
     source_revision: null,

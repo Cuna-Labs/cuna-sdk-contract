@@ -2973,7 +2973,18 @@
       },
       "RuntimeUrl": {
         "type": "string",
-        "pattern": "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.cunacode\\.cloud$"
+        "description": "Cuna producers emit only cunacode.cloud. Consumers temporarily accept the exact runacode.cloud predecessor during the 1.7 expand phase.",
+        "oneOf": [
+          {
+            "title": "Canonical Cuna runtime URL",
+            "pattern": "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.cunacode\\.cloud$"
+          },
+          {
+            "title": "Deprecated legacy runtime URL",
+            "deprecated": true,
+            "pattern": "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.runacode\\.cloud$"
+          }
+        ]
       },
       "OutboundPolicy": {
         "type": "object",
@@ -4647,7 +4658,18 @@
         "properties": {
           "url": {
             "type": "string",
-            "pattern": "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.cunacode\\.cloud/__runa/auth\\?t=[^&#]+$"
+            "description": "Single-use handoff URL. Cuna producers emit only cunacode.cloud; the exact runacode.cloud predecessor remains response-compatible during the 1.7 expand phase.",
+            "oneOf": [
+              {
+                "title": "Canonical Cuna handoff URL",
+                "pattern": "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.cunacode\\.cloud/__runa/auth\\?t=[^&#]+$"
+              },
+              {
+                "title": "Deprecated legacy handoff URL",
+                "deprecated": true,
+                "pattern": "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.runacode\\.cloud/__runa/auth\\?t=[^&#]+$"
+              }
+            ]
           }
         }
       },
@@ -5910,6 +5932,19 @@
         }
       }
     }
+  },
+  "x-cuna-runtime-url-migration": {
+    "phase": "expand",
+    "introducedIn": "1.7.0",
+    "reviewBefore": "1.8.0",
+    "canonicalEmissionZone": "cunacode.cloud",
+    "acceptedLegacyZone": "runacode.cloud",
+    "legacyEmissionAllowed": false,
+    "contractionRequires": [
+      "zero_legacy_producer_traffic",
+      "consumer_adoption_evidence",
+      "mixed_version_rollback_rehearsal"
+    ]
   },
   "x-runa-wire": {
     "requestAccept": "application/json, application/problem+json",
