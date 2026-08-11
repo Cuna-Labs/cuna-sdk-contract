@@ -71,6 +71,39 @@ test("runtime handoff schemas implement the bounded Cuna expand phase", () => {
   });
 });
 
+test("runtime expand validation rejects exact-shape and policy mutations", () => {
+  const schemaMutations = [
+    (schema) => { delete schema.type; },
+    (schema) => { schema.oneOf.pop(); },
+    (schema) => { schema.oneOf[1].pattern = schema.oneOf[0].pattern; },
+    (schema) => { schema.oneOf[1].deprecated = false; },
+  ];
+  for (const schemaName of ["RuntimeUrl", "OpenResult"]) {
+    for (const mutate of schemaMutations) {
+      const candidate = clone();
+      const openapiSchema = schemaName === "RuntimeUrl"
+        ? candidate.openapi.components.schemas.RuntimeUrl
+        : candidate.openapi.components.schemas.OpenResult.properties.url;
+      const snapshotSchema = schemaName === "RuntimeUrl"
+        ? candidate.snapshot.components.schemas.RuntimeUrl
+        : candidate.snapshot.components.schemas.OpenResult.properties.url;
+      mutate(openapiSchema);
+      mutate(snapshotSchema);
+      assert.throws(() => validateBundle(candidate), /R-003-29/u, `${schemaName} mutation accepted`);
+    }
+  }
+
+  for (const mutate of [
+    (migration) => { migration.phase = "contract"; },
+    (migration) => { migration.legacyEmissionAllowed = true; },
+    (migration) => { migration.contractionRequires.pop(); },
+  ]) {
+    const candidate = clone();
+    mutate(candidate.openapi["x-cuna-runtime-url-migration"]);
+    assert.throws(() => validateBundle(candidate), /R-003-29/u, "migration policy mutation accepted");
+  }
+});
+
 test("TC-003-12 rejects status, media, UTF-8, header, cap, redirect, schema, and UUID mutations for every descriptor", () => {
   const mutations = [
     (operation) => { operation.success.selector.status = 299; },

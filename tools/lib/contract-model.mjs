@@ -61,6 +61,45 @@ const GENERATOR = "tools/runa-contract-generator.mjs";
 const EXTRACTOR = "tools/extract-prd002-expectations.mjs";
 const fail = (requirement, artifact, detail) => { throw new Error(`${requirement}: ${artifact}: ${detail}`); };
 const same = (left, right) => canonicalJson(left) === canonicalJson(right);
+const CANONICAL_RUNTIME_URL_PATTERN =
+  "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.cunacode\\.cloud$";
+const LEGACY_RUNTIME_URL_PATTERN =
+  "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.runacode\\.cloud$";
+const CANONICAL_HANDOFF_URL_PATTERN =
+  "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.cunacode\\.cloud/__runa/auth\\?t=[^&#]+$";
+const LEGACY_HANDOFF_URL_PATTERN =
+  "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.runacode\\.cloud/__runa/auth\\?t=[^&#]+$";
+const EXPECTED_RUNTIME_URL_MIGRATION = Object.freeze({
+  phase: "expand",
+  introducedIn: "1.7.0",
+  reviewBefore: "1.8.0",
+  canonicalEmissionZone: "cunacode.cloud",
+  acceptedLegacyZone: "runacode.cloud",
+  legacyEmissionAllowed: false,
+  contractionRequires: [
+    "zero_legacy_producer_traffic",
+    "consumer_adoption_evidence",
+    "mixed_version_rollback_rehearsal",
+  ],
+});
+
+function validateRuntimeUrlMigration(openapi) {
+  const runtimeUrl = openapi.components?.schemas?.RuntimeUrl;
+  const handoffUrl = openapi.components?.schemas?.OpenResult?.properties?.url;
+  const expectedRuntimeOneOf = [
+    { title: "Canonical Cuna runtime URL", pattern: CANONICAL_RUNTIME_URL_PATTERN },
+    { title: "Deprecated legacy runtime URL", deprecated: true, pattern: LEGACY_RUNTIME_URL_PATTERN },
+  ];
+  const expectedHandoffOneOf = [
+    { title: "Canonical Cuna handoff URL", pattern: CANONICAL_HANDOFF_URL_PATTERN },
+    { title: "Deprecated legacy handoff URL", deprecated: true, pattern: LEGACY_HANDOFF_URL_PATTERN },
+  ];
+  if (runtimeUrl?.type !== "string" || !same(runtimeUrl.oneOf, expectedRuntimeOneOf) ||
+      handoffUrl?.type !== "string" || !same(handoffUrl.oneOf, expectedHandoffOneOf) ||
+      !same(openapi["x-cuna-runtime-url-migration"], EXPECTED_RUNTIME_URL_MIGRATION)) {
+    fail("R-003-29", "openapi", "bounded runtime URL expand phase differs");
+  }
+}
 
 function resolveLocalRef(document, value) {
   if (value?.$ref === undefined) return value;
@@ -264,6 +303,7 @@ function validateProvenance(bundle) {
 
 export function validateBundle(bundle) {
   if (bundle.schema?.["x-schema-format-version"] !== 1 || bundle.schema?.additionalProperties !== false || bundle.schema?.$defs?.operation?.additionalProperties !== false || !bundle.schema?.$defs?.unresolved?.properties?.evidence_state) fail("R-003-02", "snapshot schema", "structural closure/evidence enum missing");
+  validateRuntimeUrlMigration(bundle.openapi);
   validateStructuralSchema(bundle.schema, bundle.snapshot);
   validateSnapshot(bundle.snapshot, bundle.openapi);
   if (bundle.expected.accepted_baseline?.path !== SOURCE_BASELINE || bundle.expected.accepted_baseline?.sha256 !== sha256(bundle.baselineSourceBytes)) fail("R-003-13", EXPECTED, "accepted baseline digest differs");
